@@ -365,7 +365,7 @@ The next step is to generate the key pair, but first change the permission of th
 the owner is able to read or execute newly-created files. Now the actual
 key generation, issue `wg genkey | tee privatekey | wg pubkey > publickey`.
 
-From this point on you can cheat by going to https://wireguardconfig.com/ and
+From this point on you can cheat by going to [https://wireguardconfig.com/](https://www.wireguardconfig.com/) and
 using a generated configuration. But is not that difficult to set it up yourself, 
 start with creating the following file `/etc/wireguard/wg0.conf` and adding your 
 own private key and a client's public key to the following configuration in the 
