@@ -1,4 +1,4 @@
-# A Comprehensive Guide On WireGuard/DNSCrypt/SSH/Honeypot Implementation on OVH (Or any other Debian server) #
+# A Comprehensive Guide On WireGuard/DNSCrypt/SSH on Debian server #
 
 ### Introduction ###
 
@@ -115,7 +115,7 @@ appropriate private key added and attempt to connect to the server. If
 all goes well you will be prompted for a username and will be instantly
 logged in.
 
-### Firewall Setup ###
+### Firewall Setup (With ufw) ###
 
 I like to use the [ufw](https://wiki.ubuntuusers.de/ufw/) (uncomplicated firewall) programm
 for it. It handles all iptables settings we have to make in order to secure our server.
@@ -124,13 +124,15 @@ If you want to see the current status of ufw just type `sudo ufw status verbose`
 
 Here are our first rules we need before we start ufw:
 -  `sudo ufw default deny incoming` - denys all incoming traffic by default
--  `sudo ufw allow 22/tcp` - allow ssh connection
+-  `sudo ufw allow 22/tcp comment ssh` - allow ssh connection
 
 Now we can start ufw by `sudo ufw enable`.
 
 ## DNSCrypt ##
 
-*UFW*: Run `ufw allow proto udp from 127.0.0.1 port 53`
+*UFW*: Run `ufw allow proto udp from 127.0.0.1 port 53 comment localhost to dns`
+If you want other clients on your local network to use the dns proxy, 
+you have run `ufw allow proto udp from <network> port 53 comment network to dns`
 
 Installing this on the server allows full ownership over DNS traffic both for your Wireguard client/s and the local network. 
 Your DNS traffic will be forwarded to DNSCrypt which will in turn facilitate DNSSEC and the encryption of DNS requests. 
@@ -219,7 +221,8 @@ if websites timeout and you can still access `https://1.1.1.1/` then all is well
 
 ## WireGuard ##
 
-*UFW*: Run `ufw allow proto udp from 10.0.0.1 port 53`
+*UFW*: Run `ufw allow proto udp from <wireguard-network> port 53 comment wireguard to dns` and `ufw route allow in on wg0 comment wireguard`
+Also you need to allow the communication to wireguard service itself `ufw allow <wireguard-port>/udp comment wireguard`
 
 Now to finally install WireGuard, this is achieved by issuing `apt-get
 install wireguard`. Ensure the service is installed and running by
@@ -232,32 +235,9 @@ ip6_udp_tunnel         16384  1 wireguard
 udp_tunnel             16384  1 wireguard
 ```
 
-The next step is to generate the key pair, but first change the permission of the
-`/etc/wireguard/` directory with `umask 077`. This will ensure that only
-the owner is able to read or execute newly-created files. Now the actual
-key generation, issue `wg genkey | tee privatekey | wg pubkey > publickey`.
-
-From this point on you can cheat by going to [wireguardconfig.com](https://www.wireguardconfig.com/) and
-using a generated configuration. But is not that difficult to set it up yourself, 
-start with creating the following file `/etc/wireguard/wg0.conf` and adding your 
-own private key and a client's public key to the following configuration in the 
-image below (It is best to do both the client and server steps at the same time). 
+You can use [wireguardconfig.com](https://www.wireguardconfig.com/) to generate a all config files.
+Place the server config to `/etc/wireguard/wg0.conf`. 
 Then save it and modify its permissions with `chmod 600 /etc/wireguard/wg0.conf`. 
-
-Now create the `wg0.conf`:
-```
-[Interface]
-PrivateKey = INSERT YOUR PRIVATE KEY HERE
-Address = 10.0.0.1/24
-SaveConfig = true
-PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE; ip6tables -A FORWARD -i wg0 -j ACCEPT; ip6tables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
-PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE; ip6tables -D FORWARD -i wg0 -j ACCEPT; ip6tables -t nat -D POSTROUTING -o eth0 -j MASQUERADE
-ListenPort = 51820
-
-[Peer]
-PublicKey = INSERT CLIENT PUBLIC KEY HERE
-AllowedIPs = 10.0.0.2/32
-```
 
 Subsequent clients are added below each other with the same formatting, to then remove a user you issue 
 `wg set wg0 peer CLIENTPUBLICKEY remove` or modify the wg0.conf manually. To load a
@@ -310,13 +290,13 @@ change the permission of the `/etc/wireguard/` directory with `umask
 ```
 [Interface]
 PrivateKey = CLIENT PRIVATE KEY
-ListenPort = 51820
+ListenPort = 123
 Address = 10.0.0.4/24
 DNS = 10.0.0.1
 [Peer]
 PublicKey = SERVER PUBLIC KEY
 AllowedIPs = 0.0.0.0/0, ::/0
-Endpoint = SERVERIP:51820
+Endpoint = SERVERIP:123
 ```
 
 The AllowedIPs setting can be changed to permit LAN access or can
@@ -346,55 +326,72 @@ For Windows users it is the same, but you have to write out the client configura
 Once this is all done you need to refresh the configuration (albeit without resetting the interface) with the command
 `wg addconf wg0 <(wg-quick strip wg0)`.
 
+## Installing NoMachine ##
+
+*UFW*: Run `ufw allow proto udp from <wireguard-network> port 4000 comment nomachine` 
+and `ufw allow proto tcp from <wireguard-network> port 4000 comment nomachine`
+
+I really like to see the desktop environment on my remote server. That is why I use [nomachine](https://www.nomachine.com/).
+First download the Debian package via `wget https://download.nomachine.com/download/8.11/Linux/nomachine_8.11.3_4_amd64.deb`.
+Then you can install it by `sudo dpkg -i nomachine_8.11.3_4_amd64.deb`.
+Now the service is started and listening on port 4000. We have to edit `/usr/NX/etc/node.cfg` to set the right desktop session we want.
+Therefore we have to find the property `DefaultDesktopCommand` and change it accordingly.
+
+- CINNAMON>	DefaultDesktopCommand "/usr/bin/cinnamon-session --session cinnamon"
+- MATE>	DefaultDesktopCommand "/usr/bin/mate-session"
+- LXDE>	DefaultDesktopCommand "/usr/bin/startlxde"
+- XFCE>	DefaultDesktopCommand "/usr/bin/startxfce4"
+- UNITY>	DefaultDesktopCommand "/etc/X11/Xsession 'gnome-session -session=ubuntu' "
+
+Save the file and restart the nxserver via `/etc/NX/nxserver --restart`.
+
+### Use Key based Authentication ###
+
+Create a file for containing public key via `touch .nx/config/authorized.crt`. Then you can past you public key in there.
+After trying out that it works (don't forget to change the auth method on client side). You can disable the password authentication by
+ediit the `/usr/NX/etc/server.cfg`. There you have to set `AcceptedAuthenticationMethods NX-private-key`.
+Then restart the service via `/etc/NX/nxserver --restart`.
+
+### Use Virtual Display ###
+
+If you want to use the virtual display instead, have to stop the lightdm service by `systemctl stop lightdm` first.
+Then you have to restart the nxserver via `/etc/NX/nxserver --restart`.
+
+### Enable Sound ###
+
+If you want to transfer the sound also, you have to run `/usr/NX/scripts/setup/nxnode --audiosetup`.
+
+## Installing Podman ###
+
+To install [podman](https://podman.io/) you only need to run `apt install podman podman-compose`
+The `podman-compose` plugin allows you to use a `docker-compose.yaml` to manage all your container.
+
+If you want to export standard ports without need to start podman as root, you have to change the
+`/etc/sysctl.conf` and set `net.ipv4.ip_unprivileged_port_start=80`.
+To apply this setting run `sudo sysctl -p`.
+Then you can run your `docker-compose.yaml`via `podman-compose up -d`.
+
+*UFW*: Don't forget to open the specific port you need with `ufw allow 80/tcp comment my-app`.
+
 ## Additional Security Post Installation ##
-
-### SSH via WireGuard (With Knocking) ###
-
-Port knocking is great, but why allow anybody from any IP address to
-knock at all? Why not limit the knocks to those already on the WireGuard
-network, this way you can ensure that only those you can trust can even
-begin the knocking process. This is achieved by simply modifying the
-knockd configuration file, as per above, but changing the interface to wg0.
-This is done by simply adding `interface = wg0` in the options section.
-If you wanted to be even more paranoid, you could set up an additional
-WireGuard interface specifically to access SSH and use that as the
-knocking interface, this would allow sharing of the WireGuard VPN access
-but also ensuring your own secure access on a different interface and IP
-address, solely for SSH.
 
 ### Connection Profiling ###
 
-Websites detect your Maximum Transmission Units (MTU) and use that against you, this is a known method to fingerprint connections. Wireguard uses the default MTU of `1420` which is also the default of IPSec. So if a website does not allow VPN connections, this is their point of call. Now what would be your new MTU? It is important to get this value right. You can use websites like http://www.letmecheck.it/mtu-test.php to determine the best one for a particular website/service but I found that `1480` seems best. It will get fingerprinted as a IPIP/SIT tunnel, so a Linux virtual interface - which is better than IPSec. 
+Websites detect your Maximum Transmission Units (MTU) and use that against you, 
+this is a known method to fingerprint connections. Wireguard uses the default MTU of `1420`
+which is also the default of IPSec. So if a website does not allow VPN connections, 
+this is their point of call. Now what would be your new MTU? It is important to get this value right.
+You can use websites like http://www.letmecheck.it/mtu-test.php to determine the best one for
+a particular website/service but I found that `1480` seems best. It will get fingerprinted as a IPIP/SIT tunnel,
+so a Linux virtual interface - which is better than IPSec. 
 
-To change the MTU on the fly you can simply run `sudo ifconfig wg0 mtu 1480 up`. Confirm it has been changed with `netstat -i` or with `ifconfig`. From here you can make the value permanent by adding it to the `wg0.conf` file by simply adding `MTU = 1480` within the interface section. Note you must change the MTU in your client also, else you will experience dropouts. 
+To change the MTU on the fly you can simply run `sudo ifconfig wg0 mtu 1480 up`. 
+Confirm it has been changed with `netstat -i` or with `ifconfig`.
+From here you can make the value permanent by adding it to the `wg0.conf` file
+by simply adding `MTU = 1480` within the interface section. 
+Note you must change the MTU in your client also, else you will experience dropouts. 
 
 ![](media/image24.jpeg)
-
-## Other Considerations ##
-
-You must be aware of the Autonomous System Number (ASN) that is assigned
-to your server IP address when you buy your server. Mine for example is
-AS16276, belonging to OVH SAS in Canada, its purpose is for paid VPN,
-hosting and 'good' bots. It has however 40,382 active spam IP addresses
-out of a total of 381,412 -- that's 10.5% of the entire network
-consisting of spammers, this is not good and was likely the reason
-behind having multiple DDoS attacks when my IP was still new.
-
-![](media/image27.jpeg)
-
-What this means is that should you indeed use your server as a VPN for
-daily use, you may find that you have been banned from websites you have
-never visited, this is simply because the website has chosen to ban not
-your IP address but your ASN entirely. Luckily the IP address I have is
-unique to my account and is not shared, this situation would be worse on
-a commercial VPN provider, where allocated shared IPs can be banned in
-global black lists due to spamming and other illegal activity. My ASN is
-also not part of the Spamhaus Project ASN-DROP list; if it were then I
-would certainly not continue using my hosting provider.
-
-![](media/1005.png)
-
-Your ASN could easily just be banned from websites you're trying to visit, this is though more common with public VPN's as their anonymity allows for abuse and thus for a service to block one IP would be meaningless, so they ban the entire VPN provider, or at least a large range of their servers.
 
 ### Logs ###
 I highly suggest installing `lnav` for log aggregation. But prior to doing this remember
@@ -435,103 +432,39 @@ with `systemctl status cron.service` or ideally `sudo grep CRON /var/log/syslog`
 
 Be careful with what you put in these scripts, because they are run as root (depending on your permissions) they are very powerful.
 
-## Tunneling aka VPN Chain aka Double-VPN ##
-
-OK, so you're confident with this guide and you want to step it up a bit? You want to connect through two VPNs before accessing the internet?
-Well first step is to literally do this guide TWICE, it's surely not that hard at this point, right?
-
-Now you have two server servers we will call them server1 and server2, the first is what you will connect to, the second is what ultimately will be your external IP.
-Thus it will be: `You ---> server1 ---> server2 ---> Internet`.
-
-On server1, create a second wireguard interface, `wg1` and generate a new set of public and private keys with `wg genkey | tee privatekey | wg pubkey > publickey`. 
-You do this by making `nano /etc/wireguard/wg1.conf`. Within this interface file insert the following (Note, the IP address does not have to be on a different subnet, remember, this interface is essentially just another client):
-
--   `[Interface]`
--   `Address = 10.0.0.4/24`
--   `PrivateKey = theprivatekeyyoujustmade`
--   `FwMark = 51280`
-
--   `[Peer]`
--   `PublicKey = thepublickeyofserver2`
--   `AllowedIPS = 0.0.0.0/0`
--   `Endpoint = server2IPAddress:51820`
--   `PersistentKeepalive = 21`
-
-Now edit your server1 `wg0` configuration file and add `FwMark = 51820` much like `wg1` has. Save and close, server1 configuation complete!
-
-Now you must add these routes using the following commands:
-
--   `echo "1 wg1" >> /etc/iproute2/rt_tables`
--   `ip route add 0.0.0.0/0 dev wg0 table wg1`
--   `ip rule add from 10.0.0.0/24 lookup wg1`
-
-Now go into your server2 and edit its `wg0` file and add a new peer using server1's public key (that you made earlier) and give it the IP address of `10.0.0.4/32` (or whatever matches the configuration you just made).
-
-Restart server2's `wg0` either fully with `wg-quick down wg0` and then `wg-quick up wg0` or just simply run `wg addconf wg0 <(wg-quick strip wg0)`.
-server2 will now be ready to recieve server1, so go back into server1 and do the same thing to its `wg0`. At this point you can finally start `wg1`.
-
-If all went well server1's external IP address will now be that of server2. Try it out with `curl whatismyip.akamai.com`.
-
-The client can now connect to server1, which will connect through server2! Mission Complete! You can also obviously connect to either of them individually still.
-Disabling `wg1` on server1 will not cause any issue, the connection will just be as it was before. So you can essentially turn this ability on and off at your will.
-
-On the topic of turning it on and off at your will, here is a nice and clever method that does not involve you logging into SSH. Just use the `knockd` service!
-Start by editing `/etc/knockd.conf` and adding another item much like how SSH is done, check out this example - note that each and every port is different, if you use the same port the sequence will get broken and it wont work. Don't forget to restart the service when you're finished editing the config file, you can do that with `systemctl restart knockd.service`.
-
-![](media/wg1knockdconf.png)
-
-Basically `knockd` can do more than just enable and disable your SSH port, you can make it do whatever command you wish, so why not use it to toggle your double-vpn!
-Once the ports are knocked you can see in the log `/var/log/knockd.log` the sequence that it did and the command it ran. You can use your imagination for what other scripts or commands you could run.
-
-![](media/wg1knockd.png)
-
-### Port Knocking ###
-
-Now it's time to setup port knocking. This will ensure that along with a
-different SSH port number, it will remain blocked in the iptables (to be
-setup next) unless a specific sequence of ports are 'knocked'. Only then
-the iptables will allow the SSH port to be open to the IP address of the
-knocker. So the first step is to simply install the service required
-with the command `apt-get install knockd`. Now before its run its
-important to modify the default settings, the service even has a
-starting flag hidden away in a different file that must be changed prior
-to being started for the first time. The configuration file is in
-`/etc/knockd.conf` and this is my recommended bespoke settings:
-
-![](media/image10.jpeg)
-
-What these settings achieve is the need to knock in the sequence 1337,
-8888 and 1200 within 5 seconds of each other (Can be any sequence and
-amount of ports you wish). When this is done the IP address of the one
-who knocked will be added to the iptables, allowing exclusive access to
-port 88 (or whatever port you set SSH to). It will also only accept TCP
-SYN packets. After 15 seconds the IP that was added to the iptables will
-be removed -- this won't log you out of the SSH session but it will
-prevent you from logging back in without knocking again, this is easier
-than the default settings which require the user to knock the SSH port
-shut, which can be easily forgotten.
-
-Now access the following file `/etc/default/knockd` and change
-`START_KNOCKD` to `1`. Then start the knockd service by running
-`systemctl start knockd`. From this point onwards you will not be able
-to access the SSH normally (Well after you've finished setting up IP Tables). 
-Note that according to the rules, the IP that knocked is the IP that will be 
-added to the iptables -- remember to be mindful of this. 
-This will be modified again after WireGuard is installed. 
-
-Once this is set up install knockd on another Linux machine
-and issue the command `knock -v IP PORT1 PORT2` to open SSH or for
-Windows download the application `BwE Port Knocker` (available on my
-GitHub) which I developed for this very write-up. This will be vital to
-getting back into the server. Again, should there be a situation where you
-cannot login you still can via the KVM console.
-
-![](media/image11.jpeg)
-
 ## Troubleshooting ##
 
 During my time with this setup I have found and discovered various small issues, 
 here are my quick fixes for them.
+
+## Blocked by Autonomous System Number (ASN) ##
+
+You must be aware of the Autonomous System Number (ASN) that is assigned
+to your server IP address when you buy your server. Mine for example is
+AS16276, belonging to OVH SAS in Canada, its purpose is for paid VPN,
+hosting and 'good' bots. It has however 40,382 active spam IP addresses
+out of a total of 381,412 -- that's 10.5% of the entire network
+consisting of spammers, this is not good and was likely the reason
+behind having multiple DDoS attacks when my IP was still new.
+
+![](media/image27.jpeg)
+
+What this means is that should you indeed use your server as a VPN for
+daily use, you may find that you have been banned from websites you have
+never visited, this is simply because the website has chosen to ban not
+your IP address but your ASN entirely. Luckily the IP address I have is
+unique to my account and is not shared, this situation would be worse on
+a commercial VPN provider, where allocated shared IPs can be banned in
+global black lists due to spamming and other illegal activity. My ASN is
+also not part of the Spamhaus Project ASN-DROP list; if it were then I
+would certainly not continue using my hosting provider.
+
+![](media/1005.png)
+
+Your ASN could easily just be banned from websites you're trying to visit, 
+this is though more common with public VPN's as their anonymity allows for
+abuse and thus for a service to block one IP would be meaningless, 
+so they ban the entire VPN provider, or at least a large range of their servers.
 
 ### Unable to Locate Package: Wireguard? ###
 
