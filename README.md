@@ -1,4 +1,4 @@
-# A Comprehensive Guide On WireGuard/DNSCrypt/SSH on Debian server #
+# WireGuard/DNSCrypt/SSH on Debian Server #
 
 ### Introduction ###
 
