@@ -500,28 +500,6 @@ you need to input `sudo modprobe wireguard`. If the resultant answer is somethin
 `Badprobe: FATAL: Module wireguard not found in directory ...`  then your solution is to run 
 `apt-get install wireguard-dkms wireguard-tools linux-headers-$(uname -r)`.
 
-### Knockd Not Opening Port ###
-
-Well if you've not modified the interface for knockd, it could simply be because you're on the VPN.
-Its default settings are to accept knocks from eth0, if you're on the VPN you're on wg0. It won't work.
-If it works when you disconnect from the VPN you should add the wg0 interface into knockd if you prefer accessing it this way.
-
-### Knockd Not Starting at Boot ###
-
-Confirm the issue with `systemctl is-enabled knockd.service`, if it comes up as `static`
-then edit `/lib/systemd/system/knockd.service` and add this to the bottom:
-
--   `[Install]`
--   `WantedBy=multi-user.target`
--   `Alias=knockd.service`
-
-Run the following: `systemctl enable knockd.service` and `systemctl is-enabled knockd.service`
-it should now come up as `enabled`.
-
-It may still not start due to the sequence of how things start up, so it may error out saying
-that there is no wg0 interface. If this is the case you need to make a cron job that restarts it
-after wireguard starts.
-
 ### DNSCrypt Not Starting at Boot (Or at all) ###
 Confirm if port 53 is not already in use by something else with `lsof -i -P -n | grep LISTEN`
 Kill the PID of whatever is already using that port.
