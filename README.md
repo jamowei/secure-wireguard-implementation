@@ -30,7 +30,7 @@ distribute among peers.
 
 ### Setting up the server ###
 
-Be sure to issue `apt update` and `apt upgrade` and do this regularly. I also recommend changing
+Be sure to issue `sudo apt update` and `sudo apt upgrade` and do this regularly. I also recommend changing
 the password that they give you and securing your account in the method you prefer.
 
 The first thing to do is to now secure the SSH connection and ultimately
@@ -40,20 +40,20 @@ Start by installing fail2ban, an active intrusion detection system
 designed to ban brute force attempts towards your SSH. Issue the
 following commands to install fail2ban:
 
--   `apt install fail2ban`
+-   `sudo apt install fail2ban`
 
--   `cp /etc/fail2ban/fail2ban.conf /etc/fail2ban/fail2ban.local`
+-   `sudo cp /etc/fail2ban/fail2ban.conf /etc/fail2ban/fail2ban.local`
 
--   `cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local`
+-   `sudo cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local`
 
-Once this is done you'll need to modify the `/etc/fail2ban/jail.local`
+Once this is done you'll need to modify the `sudo nano /etc/fail2ban/jail.local`
 file to adjust the time limits, this will mean that users whom attempt
 to login to your SSH will get banned for x period of time after x
 attempts etc.
 
 ![](media/image4.jpeg)
 
-From here you can issue the command `systemctl status fail2ban.service`
+From here you can issue the command `sudo systemctl status fail2ban.service`
 to confirm the service is indeed running. You can also view the IP's
 that are currently banned with the command `fail2ban-client status
 sshd`, through the iptable rules or view the log file directly at
@@ -65,13 +65,13 @@ Another important step is to change the default SSH port of 22 to
 something else. This will aid in preventing automated bots from scanning
 your server, though it would not prevent somebody from discovering it
 eventually. This can be done by modifying the SSH config file at
-`/etc/ssh/sshd_config`. Don't forget to update your fail2ban to suit the
+`sudo nano /etc/ssh/sshd_config`. Don't forget to update your fail2ban to suit the
 change (and restart it), but I have noticed that fail2ban does not seem to enjoy being
 modified after the fact. If this is the case for you just modify the
 iptables manually. To delete the original rule, find its number with
-`iptables -L -v -n --line-numbers` and deleting it with `iptables -D
+`sudo iptables -L -v -n --line-numbers` and deleting it with `sudo iptables -D
 INPUT #`. Now to add your bespoke SSH port with fail2ban issue the
-following command `iptables -A INPUT -p tcp --dport SSHPORT# -j
+following command `sudo iptables -A INPUT -p tcp --dport SSHPORT# -j
 f2b-sshd`.
 
 ![](media/image6.jpeg)
@@ -100,7 +100,7 @@ You should see private key `.ssh/id_ed25519` and public key `.ssh/id_ed25519.pub
 
 Now you have to upload the public key to the `/home/<username>/.ssh/authorized_keys` file on the server.
 This can be easily achieved by `ssh-copy-id <username>@<server-ip>`.
-Or you create the file first `touch .ssh/authorized_keys` and set the permissions `chmod 700 .ssh/authorized_keys`.
+Or you create the file first `touch .ssh/authorized_keys` and set the permissions `sudo chmod 700 .ssh/authorized_keys`.
 Then you have to copy the public key in `.ssh/id_ed25519.pub` and paste it to the 
 `/home/<username>/.ssh/authorized_keys` file on server.
 
@@ -110,7 +110,7 @@ At the bottom of the configuration file add the following `AuthenticationMethods
 If you are not going to log in as root, it is important to change the setting here, so set `PermitRootLogin no`. 
 
 At this point you should restart the SSH service with the command
-`systemctl restart sshd`. Open another SSH session with the
+`sudo systemctl restart sshd`. Open another SSH session with the
 appropriate private key added and attempt to connect to the server. If
 all goes well you will be prompted for a username and will be instantly
 logged in.
@@ -130,9 +130,9 @@ Now we can start ufw by `sudo ufw enable`.
 
 ## DNSCrypt ##
 
-*UFW*: Run `ufw allow proto udp from 127.0.0.1 port 53 comment localhost to dns`
+*UFW*: Run `sudo ufw allow proto udp from 127.0.0.1 port 53 comment localhost to dns`
 If you want other clients on your local network to use the dns proxy, 
-you have run `ufw allow proto udp from <network> port 53 comment network to dns`
+you have run `sudo ufw allow proto udp from <network> port 53 comment network to dns`
 
 Installing this on the server allows full ownership over DNS traffic both for your Wireguard client/s and the local network. 
 Your DNS traffic will be forwarded to DNSCrypt which will in turn facilitate DNSSEC and the encryption of DNS requests. 
@@ -145,9 +145,9 @@ this is done by running the following two commands.
 
 Start with `sudo apt update` and then `sudo apt install -t testing dnscrypt-proxy`
 
-It is recommended then to reset and delete `rm /etc/apt/sources.list.d/testing.list`.
+It is recommended then to reset and delete `sudo rm /etc/apt/sources.list.d/testing.list`.
 
-The next step then is to configure DNSCrypt, first edit `/etc/dnscrypt-proxy/dnscrypt-proxy.toml`
+The next step then is to configure DNSCrypt, first edit `sudo nano /etc/dnscrypt-proxy/dnscrypt-proxy.toml`
 and modify the `listen_address` line to be `[]`.
 
 Now to add your preferred DNS providers:
@@ -175,15 +175,15 @@ fallback_resolvers = ['9.9.9.9:53', '8.8.8.8:53']
 Obviously these settings are not everything, but this is what I recommend you change/add from the default.
 
 Now download the relay and public resolvers files, because apparently DNSCrypt does not do it for you:
--  `wget https://download.dnscrypt.info/dnscrypt-resolvers/v3/relays.md -P /etc/dnscrypt-proxy/`
--  `wget https://download.dnscrypt.info/dnscrypt-resolvers/v3/public-resolvers.md -P /etc/dnscrypt-proxy/`
+-  `sudo wget https://download.dnscrypt.info/dnscrypt-resolvers/v3/relays.md -P /etc/dnscrypt-proxy/`
+-  `sudo wget https://download.dnscrypt.info/dnscrypt-resolvers/v3/public-resolvers.md -P /etc/dnscrypt-proxy/`
 
-Now you need to modify the before mentioned `dnscrypt-proxy.socket` service to point to the correct IP address, so edit `/lib/systemd/system/dnscrypt-proxy.socket`
+Now you need to modify the before mentioned `dnscrypt-proxy.socket` service to point to the correct IP address, so edit `sudo nano /lib/systemd/system/dnscrypt-proxy.socket`
 and modify `ListenStream` and `ListenDatagram` to be `0.0.0.0:53`. Having it at 0.0.0.0 rather than 127.0.0.1 means that other interface like `wg0`
 will be able to access it. You can point your clients to use this DNS by changing their configuration to point to the DNS to the server.
 
 At this stage  you need to modify your systems default resolve file, but first back it up  
-with `cp /etc/resolv.conf /etc/resolv.conf.backup` then edit it and change to 
+with `sudo cp /etc/resolv.conf /etc/resolv.conf.backup` then edit it and change to 
 ```
 nameserver 127.0.0.1
 ptions edns0
@@ -191,19 +191,31 @@ ptions edns0
 You are no longer using your default DNS!
 
 Your system will likely try and revert these settings so lock the file with 
-`chattr +i /etc/resolv.conf`, note that the `-i` switch will unlock it. 
-You should also modify `/etc/systemd/resolved.conf` and uncomment or add
+`sudo chattr +i /etc/resolv.conf`, note that the `-i` switch will unlock it. 
+You should also modify `sudo nano /etc/systemd/resolved.conf` and uncomment or add
 `DNSStubListener=No` this may help prevent port clashing in the future.
 
-Once this is all done, you should restart the service daemon with `systemctl daemon-reload`.
-Now you can restart the DNSCrypt service with `systemctl restart dnscrypt-proxy`.
+Once this is all done, you should restart the service daemon with `sudo systemctl daemon-reload`.
+Now you can restart the DNSCrypt service with `sudo systemctl restart dnscrypt-proxy`.
 
-Check if its running with `systemctl status dnscrypt-proxy`. If it all went well it should look like this:
+Check if its running with `sudo systemctl status dnscrypt-proxy`. If it all went well it should look like this:
 
 ![](media/dnscryptgood.jpg)
 
 Now you should reboot.
 
+## Firejail DNS-over-HTTPS Proxy Server ##
+
+An other easier approach is to use [fdns](https://github.com/netblue30/fdns) instead.
+From the github [release page](https://github.com/netblue30/fdns/releases) you can download the .deb package directly.
+Then install it with `sudo dkpg -i fdns_0.9.72_1_amd64.deb`. After you can try it by running `sudo fdns`.
+Now it takes a choice of upstream dns servers to use and bind itself to `127.1.1.1`. So you can try by changing your `/etc/resolv.conf` to this ip address.
+
+If you want to install it via systemd to run it on every boot, you can run the following 
+`sudo wget https://raw.githubusercontent.com/netblue30/fdns/master/etc/fdns.service -P /lib/system/systemd/`.
+If you want you can edit the file before to change the interface which the service should listen on (e.g. `ExecStart=/usr/bin/fdns --proxy-addr-any --daemonize`).
+Now enable and start the service with `sudo systemctl enable fdns` and `sudo systemctl start fdns`. Check it with `sudo systemctl status fdns`.
+ I 
 ### Testing ###
 
 Now run `dnscrypt-proxy -resolve google.com -config /etc/dnscrypt-proxy/dnscrypt-proxy.toml`.
@@ -213,18 +225,18 @@ Feel free to make a final confirmation test of the DNS by running
 `nslookup -q=A whoami.akamai.net` and looking at the respondant IP, thats your DNS.
 Once you have wireguard setup can also go to `www.dnsleaktest.com` on your client device to see which server/s you're using.
 
-Don't have nslookup? `apt install dnstools`, you will likely need this in the future anyhow.
+Don't have nslookup? `sudo apt install dnstools`, you will likely need this in the future anyhow.
 
 Another test you can do for the client side is to simply stop the DNSCrypt service 
-via `systemctl stop dnscrypt-proxy.service` and `systemctl stop dnscrypt-proxy.socket`, 
+via `sudo systemctl stop dnscrypt-proxy.service` and `sudo systemctl stop dnscrypt-proxy.socket`, 
 if websites timeout and you can still access `https://1.1.1.1/` then all is well!
 
 ## WireGuard ##
 
-*UFW*: Run `ufw allow proto udp from <wireguard-network> port 53 comment wireguard to dns` and `ufw route allow in on wg0 comment wireguard`
-Also you need to allow the communication to wireguard service itself `ufw allow <wireguard-port>/udp comment wireguard`
+*UFW*: Run `sudo ufw allow proto udp from <wireguard-network> port 53 comment wireguard to dns` and `sudo ufw route allow in on wg0 comment wireguard`
+Also you need to allow the communication to wireguard service itself `sudo ufw allow <wireguard-port>/udp comment wireguard`
 
-Now to finally install WireGuard, this is achieved by issuing `apt-get
+Now to finally install WireGuard, this is achieved by issuing `sudo apt
 install wireguard`. Ensure the service is installed and running by
 issuing `modprobe wireguard` and `lsmod | grep wireguard`. 
 
@@ -245,7 +257,7 @@ configuration (to add another client for example) without resetting the
 service run `wg addconf wg0 <(wg-quick strip wg0)`.
 
 Now ensure that your system can accommodate IP forwarding by editing
-`/etc/sysctl.conf` and adding `net.ipv4.ip_forward=1` and `net.ipv6.conf.all.forwarding=1`. 
+`sudo nano /etc/sysctl.conf` and adding `net.ipv4.ip_forward=1` and `net.ipv6.conf.all.forwarding=1`. 
 Once this is done run `sudo sysctl -p` to load your newly edited configuration. 
 Now you can finally start WireGuard with `sudo wg-quick up wg0` and confirm its running with 
 `wg show`.
@@ -254,7 +266,7 @@ Now you can finally start WireGuard with `sudo wg-quick up wg0` and confirm its 
 
 Connect to the server via WireGuard to finally confirm that you are indeed
 part of the server's LAN, this is important for a final security measure. If all is well make
-WireGuard start at boot with `systemctl enable wg-quick@wg0`. You can confirm that there is indeed
+WireGuard start at boot with `sudo systemctl enable wg-quick@wg0`. You can confirm that there is indeed
 encrypting traffic by issuing `tcpdump -n -X -I eth0 host YOURSERVERIP` 
 and looking for WireGuard's magic header identifier in each packet `0400 0000`.
 
@@ -328,8 +340,8 @@ Once this is all done you need to refresh the configuration (albeit without rese
 
 ## Installing NoMachine ##
 
-*UFW*: Run `ufw allow proto udp from <wireguard-network> port 4000 comment nomachine` 
-and `ufw allow proto tcp from <wireguard-network> port 4000 comment nomachine`
+*UFW*: Run `sudo ufw allow proto udp from <wireguard-network> port 4000 comment nomachine` 
+and `sudo ufw allow proto tcp from <wireguard-network> port 4000 comment nomachine`
 
 I really like to see the desktop environment on my remote server. That is why I use [nomachine](https://www.nomachine.com/).
 First download the Debian package via `wget https://download.nomachine.com/download/8.11/Linux/nomachine_8.11.3_4_amd64.deb`.
@@ -343,23 +355,23 @@ Therefore we have to find the property `DefaultDesktopCommand` and change it acc
 - XFCE>	DefaultDesktopCommand "/usr/bin/startxfce4"
 - UNITY>	DefaultDesktopCommand "/etc/X11/Xsession 'gnome-session -session=ubuntu' "
 
-Save the file and restart the nxserver via `/etc/NX/nxserver --restart`.
+Save the file and restart the nxserver via `sudo /etc/NX/nxserver --restart`.
 
 ### Use Key based Authentication ###
 
 Create a file for containing public key via `touch .nx/config/authorized.crt`. Then you can past you public key in there.
 After trying out that it works (don't forget to change the auth method on client side). You can disable the password authentication by
 ediit the `/usr/NX/etc/server.cfg`. There you have to set `AcceptedAuthenticationMethods NX-private-key`.
-Then restart the service via `/etc/NX/nxserver --restart`.
+Then restart the service via `sudo /etc/NX/nxserver --restart`.
 
 ### Use Virtual Display ###
 
 If you want to use the virtual display instead, have to stop the lightdm service by `systemctl stop lightdm` first.
-Then you have to restart the nxserver via `/etc/NX/nxserver --restart`.
+Then you have to restart the nxserver via `sudo /etc/NX/nxserver --restart`.
 
 ### Enable Sound ###
 
-If you want to transfer the sound also, you have to run `/usr/NX/scripts/setup/nxnode --audiosetup`.
+If you want to transfer the sound also, you have to run `sudo /usr/NX/scripts/setup/nxnode --audiosetup`.
 
 ## Installing Podman ###
 
@@ -371,7 +383,7 @@ If you want to export standard ports without need to start podman as root, you h
 To apply this setting run `sudo sysctl -p`.
 Then you can run your `docker-compose.yaml`via `podman-compose up -d`.
 
-*UFW*: Don't forget to open the specific port you need with `ufw allow 80/tcp comment my-app`.
+*UFW*: Don't forget to open the specific port you need with `sudo ufw allow 80/tcp comment my-app`.
 
 ## Additional Security Post Installation ##
 
