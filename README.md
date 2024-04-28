@@ -212,7 +212,7 @@ Then install it with `sudo dkpg -i fdns_0.9.72_1_amd64.deb`. After you can try i
 Now it takes a choice of upstream dns servers to use and bind itself to `127.1.1.1`. So you can try by changing your `/etc/resolv.conf` to this ip address.
 
 If you want to install it via systemd to run it on every boot, you can run the following 
-`sudo wget https://raw.githubusercontent.com/netblue30/fdns/master/etc/fdns.service -P /lib/system/systemd/`.
+`sudo wget https://raw.githubusercontent.com/netblue30/fdns/master/etc/fdns.service -P /lib/systemd/system/`.
 If you want you can edit the file before to change the interface which the service should listen on (e.g. `ExecStart=/usr/bin/fdns --proxy-addr-any --daemonize`).
 Now enable and start the service with `sudo systemctl enable fdns` and `sudo systemctl start fdns`. Check it with `sudo systemctl status fdns`.
  I 
