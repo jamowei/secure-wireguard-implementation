@@ -371,7 +371,7 @@ Then you have to restart the nxserver via `sudo /etc/NX/nxserver --restart`.
 
 ### Enable Sound ###
 
-If you want to transfer the sound also, you have to run `sudo /usr/NX/scripts/setup/nxnode --audiosetup`.
+If you want to transfer the sound also, you have to run `sudo /usr/NX/bin/nxnode --audiosetup`.
 
 ## Installing Podman ###
 
