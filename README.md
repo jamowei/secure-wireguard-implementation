@@ -225,7 +225,7 @@ Feel free to make a final confirmation test of the DNS by running
 `nslookup -q=A whoami.akamai.net` and looking at the respondant IP, thats your DNS.
 Once you have wireguard setup can also go to `www.dnsleaktest.com` on your client device to see which server/s you're using.
 
-Don't have nslookup? `sudo apt install dnstools`, you will likely need this in the future anyhow.
+Don't have nslookup? `sudo apt install dnsutils`, you will likely need this in the future anyhow.
 
 Another test you can do for the client side is to simply stop the DNSCrypt service 
 via `sudo systemctl stop dnscrypt-proxy.service` and `sudo systemctl stop dnscrypt-proxy.socket`, 
